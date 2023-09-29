@@ -1,5 +1,6 @@
 #  coding: utf-8 
 import socketserver
+import os
 
 # Copyright 2013 Abram Hindle, Eddie Antonio Santos
 # 
@@ -28,11 +29,47 @@ import socketserver
 
 
 class MyWebServer(socketserver.BaseRequestHandler):
+
+    @staticmethod
+    def getResponse(route: str, http_method: str):
+        # Check invalid http method 
+        if http_method != "GET":
+            return "HTTP/1.1 405 Method Not Allowed\r\nContent-Type: text/html\r\n\r\n"
+        
+        # Define the response content based on route
+        if route.endswith(".css"):
+            file_path = f"./www{route}"
+            header = "HTTP/1.1 200 OK\r\nContent-Type: text/css\r\n\r\n"
+        elif route.endswith("index.html"):
+            file_path = f'./www{route}'
+            header = "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n"
+        elif not route.endswith("/"):
+            route += "/"
+            # Have to redirect
+            return f"HTTP/1.1 301 Moved Permanently\r\nLocation: {route}\r\nContent-Type: text/html\r\n\r\n"
+        else: 
+            file_path = f'./www{route}/index.html'
+            header = "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n"
+
+        # Check if file path exist
+        if not os.path.exists(file_path):
+            return "HTTP/1.1 404 Not Found\r\nContent-Type: text/html\r\n\r\n"
+        
+        # Read the content of file and return
+        with open(file_path, 'rb') as css_file:
+            css_content = css_file.read()
+        return header + css_content.decode('utf-8')
+    
+    @staticmethod
+    def getRouteAndMethod(request_data):
+        request_parts = request_data.decode('utf-8').split()
+        return request_parts[1], request_parts[0]
     
     def handle(self):
         self.data = self.request.recv(1024).strip()
-        print ("Got a request of: %s\n" % self.data)
-        self.request.sendall(bytearray("OK",'utf-8'))
+        url_path, http_method = MyWebServer.getRouteAndMethod(self.data)
+        response = MyWebServer.getResponse(url_path, http_method)
+        self.request.sendall(bytearray(response, 'utf-8'))
 
 if __name__ == "__main__":
     HOST, PORT = "localhost", 8080
